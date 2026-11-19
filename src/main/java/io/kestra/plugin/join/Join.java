@@ -125,7 +125,7 @@ public class Join extends Task implements RunnableTask<Join.Output> {
         title = "Left data",
         description = "Must be a `kestra://` internal storage or resolvable pebble URI."
     )
-    @PluginProperty(group = "main")
+    @PluginProperty(group = "source", internalStorageURI = true)
     @NotNull
     private Property<URI> left;
 
@@ -133,7 +133,7 @@ public class Join extends Task implements RunnableTask<Join.Output> {
         title = "Right data",
         description = "Must be a `kestra://` internal storage or resolvable pebble URI."
     )
-    @PluginProperty(group = "main")
+    @PluginProperty(group = "source", internalStorageURI = true)
     @NotNull
     private Property<URI> right;
 
@@ -161,7 +161,7 @@ public class Join extends Task implements RunnableTask<Join.Output> {
             - `NESTED_LOOP`: compares every row of one input with every row of the other; only suited to small inputs.
             - `SORTED_MERGE`: sorts both inputs on the key, then merges them; the key must have the same type in every row of both inputs."""
     )
-    @PluginProperty(group = "main")
+    @PluginProperty(group = "processing")
     @Builder.Default
     private Property<JoinImplementation> joinImplementation = Property.ofValue(JoinImplementation.HASH);
 
@@ -181,7 +181,7 @@ public class Join extends Task implements RunnableTask<Join.Output> {
         title = "Output mode",
         description = "Configure output structure to differentiate fields by side."
     )
-    @PluginProperty(group = "main")
+    @PluginProperty(group = "destination")
     @Builder.Default
     private Property<OutputMode> outputMode = Property.ofValue(OutputMode.OVERWRITE);
 
@@ -189,7 +189,7 @@ public class Join extends Task implements RunnableTask<Join.Output> {
         title = "Label for left fields in output",
         description = "Depending on output mode, used as prefix in combination with prefixSeparator, or object key for left fields. Must differ from rightLabel."
     )
-    @PluginProperty(group = "main")
+    @PluginProperty(group = "destination")
     @NotBlank
     @Builder.Default
     private String leftLabel = "left";
@@ -198,7 +198,7 @@ public class Join extends Task implements RunnableTask<Join.Output> {
         title = "Label for right fields in output",
         description = "Depending on output mode, used as prefix in combination with prefixSeparator, or object key for right fields. Must differ from leftLabel."
     )
-    @PluginProperty(group = "main")
+    @PluginProperty(group = "destination")
     @NotBlank
     @Builder.Default
     private String rightLabel = "right";
@@ -207,7 +207,7 @@ public class Join extends Task implements RunnableTask<Join.Output> {
         title = "Separator character for prefixes",
         description = "When output mode is prefix, will be concatenated between label and field names. Can be blank."
     )
-    @PluginProperty(group = "main")
+    @PluginProperty(group = "destination")
     @Builder.Default
     private String prefixSeparator = "_";
 
@@ -215,7 +215,7 @@ public class Join extends Task implements RunnableTask<Join.Output> {
         title = "Keep only the first match in the output on semi joins",
         description = "If false, multiple identical rows can appear for each matching occurrence."
     )
-    @PluginProperty(group = "main")
+    @PluginProperty(group = "processing")
     @Builder.Default
     private Property<Boolean> onlyFirstMatchOnSemi = Property.ofValue(false);
 
@@ -229,7 +229,7 @@ public class Join extends Task implements RunnableTask<Join.Output> {
 
             With `WARNING` and `IGNORE`, the first such row of each input is logged, and rows without a key never match."""
     )
-    @PluginProperty(group = "main")
+    @PluginProperty(group = "reliability")
     @Builder.Default
     private Property<MissingKeyAction> onMissingKey = Property.ofValue(MissingKeyAction.FAIL);
 
