@@ -29,10 +29,10 @@ Available implementations:
 
 ## Output mode
 
-This property allows you to configure output structure to differenciate fields by side.\
-It can have following values:
+This property allows you to configure the output structure to differentiate fields by side.\
+It can have the following values:
 - **overwrite (default)**: with [merge-type joins](#join-types), fields that have identical names between inputs will be overwritten in matched rows.\
-As fields from **left** are written before **right** ones, the remaining fields will be those from **right** in the case of overwritting.
+As fields from **left** are written before **right** ones, the remaining fields will be those from **right** in the case of overwriting.
 - **prefix**: adds a prefix to fields names according to side with `leftLabel` and `rightLabel` values, and a separator character specified by the `prefixSeparator` property.\
 For example, with common `name` field, `leftLabel = "L"`, `rightLabel = "R"` and `prefixSeparator = "_"`, output could be:
 ```json
@@ -56,7 +56,7 @@ Following **ION** types are accepted for key fields:
 - `STRING`,
 - `TIMESTAMP`.
 
-Additionnaly, `NULL` type is accepted only if `onMissingKey` value is `IGNORE` or `WARNING`, which is not the case by default (see [Missing key](#missing-key)).
+Additionally, `NULL` type is accepted only if `onMissingKey` value is `IGNORE` or `WARNING`, which is not the case by default (see [Missing key](#missing-key)).
 
 ## Special cases
 
@@ -73,7 +73,7 @@ For example, for this input:
 
 The `a` field can be accessed with the following key: `id.a`.\
 This works with more levels of nesting too.\
-Note however that key is not truly evaluated as a programming expression, it is just a raw string that is splitted with dot sign.
+Note however that key is not truly evaluated as a programming expression, it is just a raw string that is split on the dot sign.
 
 The task could fail in the following contexts of nested fields:
 - using a nested key that is too deep (not reachable) for the actual row of input, for example: `id.a.z` for the previous input.
@@ -86,10 +86,10 @@ However you will get a log message for each empty input.
 
 ### Missing key
 
-By default, the task will **fail** if key field does not exist in at least one row of an input or have a `NULL` value.
+By default, the task will **fail** if the key field does not exist in at least one row of an input or has a `NULL` value.
 
-This behaviour is defined by the `onMissingKey` optional property, which have the `FAIL` default value.\
-Another possible values are:
+This behaviour is defined by the `onMissingKey` optional property, which has the `FAIL` default value.\
+Other possible values are:
 - `WARNING`: sets the task state to `WARNING`, and a log will be emitted for the first corresponding row of each input.
 - `IGNORE`: allows the task to continue with no state change, and a log will be emitted for the first corresponding row of each input.
 

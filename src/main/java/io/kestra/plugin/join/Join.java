@@ -120,7 +120,7 @@ public class Join extends Task implements RunnableTask<Join.Output> {
 
     @Schema(
         title = "Output mode",
-        description = "Configure output structure to differenciate fields by side."
+        description = "Configure output structure to differentiate fields by side."
     )
     @PluginProperty(group = "main")
     @Builder.Default
@@ -128,7 +128,7 @@ public class Join extends Task implements RunnableTask<Join.Output> {
 
     @Schema(
         title = "Label for left fields in output",
-        description = "Depending of output mode, used as prefix in combination with prefixSeparator, or object key for left fields. Must differ from rightLabel."
+        description = "Depending on output mode, used as prefix in combination with prefixSeparator, or object key for left fields. Must differ from rightLabel."
     )
     @PluginProperty(group = "main")
     @NotBlank
@@ -137,7 +137,7 @@ public class Join extends Task implements RunnableTask<Join.Output> {
 
     @Schema(
         title = "Label for right fields in output",
-        description = "Depending of output mode, used as prefix in combination with prefixSeparator, or object key for right fields. Must differ from leftLabel."
+        description = "Depending on output mode, used as prefix in combination with prefixSeparator, or object key for right fields. Must differ from leftLabel."
     )
     @PluginProperty(group = "main")
     @NotBlank

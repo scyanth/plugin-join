@@ -2,7 +2,7 @@ group: io.kestra.plugin.join
 name: "join"
 title: "Join"
 description: "Plugin to join two ION files with various join operations."
-body: "Supports multiple join types (inner, full outer...) and algorithms (hash join, sorted merge, nested loop). Allows to configure output structure to differenciate fields by side (overwriting, prefixing, nesting)."
+body: "Supports multiple join types (inner, full outer...) and algorithms (hash join, sorted merge, nested loop). Lets you configure the output structure to differentiate fields by side (overwriting, prefixing, nesting)."
 videos: []
 createdBy: "IUT de Toulouse"
 managedBy: "IUT de Toulouse"

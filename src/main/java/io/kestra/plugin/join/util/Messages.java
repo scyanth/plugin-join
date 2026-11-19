@@ -17,6 +17,6 @@ public class Messages {
     public static String UNPROCESSABLE_KEY_TYPE = "The type of value for key '%s' from %s input cannot be processed.";
     public static String UNREACHABLE_KEY_DEPTH = "The key depth in '%s' for %s input is not reachable.";
     public static String KEY_VALUE_IS_OBJECT = "The value for key '%s' from %s input is an object. Hint: the key may need to be nested or deeper.";
-    public static String WRITE_ERROR = "An exception occured while trying to write %s in temporary output file.";
-    public static String STORAGE_ERROR = "An exception occured while trying to store output file.";
+    public static String WRITE_ERROR = "An exception occurred while trying to write %s in temporary output file.";
+    public static String STORAGE_ERROR = "An exception occurred while trying to store output file.";
 }
