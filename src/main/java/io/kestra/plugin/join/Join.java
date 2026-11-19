@@ -15,6 +15,7 @@ import io.kestra.plugin.join.exception.RenderException;
 import io.kestra.plugin.join.exception.BlankPropertyException;
 import io.kestra.plugin.join.util.Messages;
 
+import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
@@ -46,22 +47,72 @@ import lombok.experimental.SuperBuilder;
 )
 @Plugin(
     examples = {
-        @io.kestra.core.models.annotations.Example(
-            title = "Inner join on SQL queries outputs",
+        @Example(
+            title = "Inner join of customers and their orders",
             full = true,
             code = """
-                id: sql_join
+                id: join_customers_orders
                 namespace: company.team
 
                 tasks:
+                  - id: customers
+                    type: io.kestra.plugin.core.storage.Write
+                    extension: .ion
+                    content: |
+                      {customer_id:1,name:"Alice"}
+                      {customer_id:2,name:"Bob"}
+                      {customer_id:3,name:"Carol"}
+
+                  - id: orders
+                    type: io.kestra.plugin.core.storage.Write
+                    extension: .ion
+                    content: |
+                      {order_id:101,customer_id:1,total:25.50}
+                      {order_id:102,customer_id:1,total:12.00}
+                      {order_id:103,customer_id:3,total:40.00}
+                      {order_id:104,customer_id:4,total:8.75}
+
                   - id: join
                     type: io.kestra.plugin.join.Join
-                    left: "{{ outputs.selectPeople.uri }}"
-                    right: "{{ outputs.selectCompany.uri }}"
+                    left: "{{ outputs.customers.uri }}"
+                    right: "{{ outputs.orders.uri }}"
+                    leftKey: customer_id
+                    rightKey: customer_id
                     joinType: INNER
-                    leftKey: company_id
-                    rightKey: id
-            """
+                """
+        ),
+        @Example(
+            title = "Left outer join on a nested key, keeping each side in its own object",
+            full = true,
+            code = """
+                id: join_customers_orders_nested
+                namespace: company.team
+
+                tasks:
+                  - id: customers
+                    type: io.kestra.plugin.core.storage.Write
+                    extension: .ion
+                    content: |
+                      {customer:{id:1},name:"Alice"}
+                      {customer:{id:2},name:"Bob"}
+
+                  - id: orders
+                    type: io.kestra.plugin.core.storage.Write
+                    extension: .ion
+                    content: |
+                      {order_id:101,customer_id:1,total:25.50}
+
+                  - id: join
+                    type: io.kestra.plugin.join.Join
+                    left: "{{ outputs.customers.uri }}"
+                    right: "{{ outputs.orders.uri }}"
+                    leftKey: customer.id
+                    rightKey: customer_id
+                    joinType: LEFT_OUTER
+                    outputMode: NEST
+                    leftLabel: customer
+                    rightLabel: order
+                """
         )
     }
 )
@@ -104,7 +155,11 @@ public class Join extends Task implements RunnableTask<Join.Output> {
 
     @Schema(
         title = "Join implementation (algorithm)",
-        description = ""
+        description = """
+            All implementations return the same rows, possibly in a different order.
+            - `HASH` (default): builds a hash table from the smaller input, then reads the other input to find matches.
+            - `NESTED_LOOP`: compares every row of one input with every row of the other; only suited to small inputs.
+            - `SORTED_MERGE`: sorts both inputs on the key, then merges them; the key must have the same type in every row of both inputs."""
     )
     @PluginProperty(group = "main")
     @Builder.Default
@@ -112,7 +167,11 @@ public class Join extends Task implements RunnableTask<Join.Output> {
 
     @Schema(
         title = "Join type",
-        description = ""
+        description = """
+            - `INNER` (default): only rows whose key matches on both sides.
+            - `FULL_OUTER`, `LEFT_OUTER`, `RIGHT_OUTER`: matched rows, plus unmatched rows from both sides, the left side or the right side.
+            - `LEFT_ANTI`, `RIGHT_ANTI`: only the rows of one side that have no match on the other side.
+            - `LEFT_SEMI`, `RIGHT_SEMI`: only the rows of one side that have a match, without fields from the other side (see `onlyFirstMatchOnSemi`)."""
     )
     @PluginProperty(group = "main")
     @Builder.Default
@@ -162,7 +221,13 @@ public class Join extends Task implements RunnableTask<Join.Output> {
 
     @Schema(
         title = "What to do when key field is missing from an input (for at least one row)",
-        description = ""
+        description = """
+            Applies when a row has no key field, or a `null` key value.
+            - `FAIL` (default): the task fails with an error showing the row.
+            - `WARNING`: the task continues and ends in `WARNING` state.
+            - `IGNORE`: the task continues and its state is not changed.
+
+            With `WARNING` and `IGNORE`, the first such row of each input is logged, and rows without a key never match."""
     )
     @PluginProperty(group = "main")
     @Builder.Default
@@ -202,19 +267,19 @@ public class Join extends Task implements RunnableTask<Join.Output> {
 
         @Schema(
             title = "The number of rows of output",
-            description = ""
+            description = "Number of rows written to the output file."
         )
         private final long outputSize;
 
         @Schema(
             title = "The number of rows of left input",
-            description = ""
+            description = "Number of rows read from the left input file."
         )
         private final long leftSize;
 
         @Schema(
             title = "The number of rows of right input",
-            description = ""
+            description = "Number of rows read from the right input file."
         )
         private final long rightSize;
 
