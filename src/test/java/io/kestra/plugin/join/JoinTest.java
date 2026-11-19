@@ -1,5 +1,7 @@
 package io.kestra.plugin.join;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
 import org.junit.jupiter.api.Test;
 
@@ -20,9 +22,6 @@ import io.kestra.core.models.flows.State;
 import io.kestra.core.models.validations.ModelValidator;
 
 import jakarta.inject.Inject;
-
-import com.amazon.ion.IonSystem;
-import com.amazon.ion.system.IonSystemBuilder;
 
 import java.util.Map;
 import java.util.Arrays;
@@ -68,7 +67,7 @@ class JoinTest {
         {id:5,rightValue:"R5-A"}
         {id:5,rightValue:"R5-B"}""";
 
-    private Map<JoinType , String> defaultExpectedResults =
+    private Map<JoinType, String> defaultExpectedResults =
         Map.of(
             JoinType.FULL_OUTER, """
                 {id:1,leftValue:"L1"}
@@ -161,13 +160,42 @@ class JoinTest {
                 tenant,
                 null,
                 URI.create("/" + IdUtils.create() + ".ion"),
-                new ByteArrayInputStream(content.getBytes())
+                new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8))
             );
         } catch (IOException e) {
-            System.err.println(e.getMessage());
-            fail("Unable to make refs files.");
-            return null;
+            return fail("Unable to store test input file.", e);
         }
+    }
+
+    /**
+     * Read the output file of a task run.
+     * @param output Output of the task run.
+     * @return Content of the output file.
+     * @throws IOException If the file cannot be read from storage.
+     */
+    private String readOutput(Join.Output output) throws IOException {
+        try (InputStream stream = this.storageInterface.get(tenant, null, output.getUri())) {
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    /**
+     * Builder of a valid task with given keys, reading the "left" and "right" variables of the run context.
+     * Each task gets a random id: Kestra requires an id on every task, and a unique one keeps
+     * runs, logs and outputs of different tests apart.
+     * @see getRunContext()
+     * @param leftKey
+     * @param rightKey
+     * @return Task builder with id, type, inputs and keys.
+     */
+    private Join.JoinBuilder<?, ?> taskBuilder(String leftKey, String rightKey) {
+        return Join.builder()
+            .id(IdUtils.create())
+            .type(Join.class.getName())
+            .left(Property.ofExpression("{{ left }}"))
+            .right(Property.ofExpression("{{ right }}"))
+            .leftKey(Property.ofValue(leftKey))
+            .rightKey(Property.ofValue(rightKey));
     }
 
     /**
@@ -186,13 +214,9 @@ class JoinTest {
             JoinType joinType,
             String leftKey,
             String rightKey) throws Exception {
-        Join task = Join.builder()
-            .left(Property.ofExpression("{{ left }}"))
-            .right(Property.ofExpression("{{ right }}"))
+        Join task = taskBuilder(leftKey, rightKey)
             .joinImplementation(Property.ofValue(joinImplementation))
             .joinType(Property.ofValue(joinType))
-            .leftKey(Property.ofValue(leftKey))
-            .rightKey(Property.ofValue(rightKey))
             .build();
         return task.run(runContext);
     }
@@ -219,13 +243,9 @@ class JoinTest {
             String leftLabel,
             String rightLabel,
             OutputMode outputMode) throws Exception {
-        Join task = Join.builder()
-            .left(Property.ofExpression("{{ left }}"))
-            .right(Property.ofExpression("{{ right }}"))
+        Join task = taskBuilder(leftKey, rightKey)
             .joinImplementation(Property.ofValue(joinImplementation))
             .joinType(Property.ofValue(joinType))
-            .leftKey(Property.ofValue(leftKey))
-            .rightKey(Property.ofValue(rightKey))
             .leftLabel(leftLabel)
             .rightLabel(rightLabel)
             .outputMode(Property.ofValue(outputMode))
@@ -251,13 +271,9 @@ class JoinTest {
             String leftKey,
             String rightKey,
             Boolean onlyFirstMatchOnSemi) throws Exception {
-        Join task = Join.builder()
-            .left(Property.ofExpression("{{ left }}"))
-            .right(Property.ofExpression("{{ right }}"))
+        Join task = taskBuilder(leftKey, rightKey)
             .joinImplementation(Property.ofValue(joinImplementation))
             .joinType(Property.ofValue(joinType))
-            .leftKey(Property.ofValue(leftKey))
-            .rightKey(Property.ofValue(rightKey))
             .onlyFirstMatchOnSemi(Property.ofValue(onlyFirstMatchOnSemi))
             .build();
         return task.run(runContext);
@@ -281,13 +297,9 @@ class JoinTest {
             String leftKey,
             String rightKey,
             MissingKeyAction onMissingKey) throws Exception {
-        Join task = Join.builder()
-            .left(Property.ofExpression("{{ left }}"))
-            .right(Property.ofExpression("{{ right }}"))
+        Join task = taskBuilder(leftKey, rightKey)
             .joinImplementation(Property.ofValue(joinImplementation))
             .joinType(Property.ofValue(joinType))
-            .leftKey(Property.ofValue(leftKey))
-            .rightKey(Property.ofValue(rightKey))
             .onMissingKey(Property.ofValue(onMissingKey))
             .build();
         return task.run(runContext);
@@ -379,22 +391,6 @@ class JoinTest {
         return getOutput(runContext, joinImplementation, joinType, defaultKey, defaultKey, onMissingKey);
     }
 
-
-    /**
-     * Builder of a task that passes validation, so that each validation test changes only one property.
-     * Kestra validates tasks (as when a flow is saved) with mandatory id and type.
-     * @return Task builder with id, type, inputs and keys.
-     */
-    private Join.JoinBuilder<?, ?> validTaskBuilder() {
-        return Join.builder()
-            .id(IdUtils.create())
-            .type(Join.class.getName())
-            .left(Property.ofExpression("{{ left }}"))
-            .right(Property.ofExpression("{{ right }}"))
-            .leftKey(Property.ofValue(defaultKey))
-            .rightKey(Property.ofValue(defaultKey));
-    }
-
     /**
      * Sort lines of ION string.
      * @param content Unsorted content.
@@ -405,6 +401,16 @@ class JoinTest {
             .filter(line -> !line.isBlank())
             .sorted()
             .collect(Collectors.joining("\n"));
+    }
+
+    /**
+     * Describe a test case in assertion messages.
+     * @param joinImplementation
+     * @param joinType
+     * @return Description of the case.
+     */
+    private String describe(JoinImplementation joinImplementation, JoinType joinType) {
+        return " (with " + joinImplementation + ", " + joinType + " join)";
     }
 
     /*
@@ -422,30 +428,16 @@ class JoinTest {
     void joinResultsAreConsistent() throws Exception {
 
         RunContext runContext = getRunContext(defaultLeftContent, defaultRightContent);
-        Join.Output runOutput = null;
 
         for (JoinImplementation joinImplementation : JoinImplementation.values()) {
             for (JoinType joinType : JoinType.values()) {
                 String expected = sortIonLines(defaultExpectedResults.get(joinType));
 
-                try {
-                    runOutput = getOutput(runContext, joinImplementation, joinType);
-                } catch (Exception e) {
-                    fail(e.getMessage() + ", cause: " + e.getCause());
-                }
+                Join.Output runOutput = getOutput(runContext, joinImplementation, joinType);
+                String result = sortIonLines(readOutput(runOutput));
 
-                try (InputStream streamResult = this.storageInterface.get(tenant, null, runOutput.getUri())) {
-                    String result = sortIonLines(new String(streamResult.readAllBytes(), StandardCharsets.UTF_8));
-
-                    System.out.println("With " + joinImplementation + ", " + joinType + " join: \n");
-                    System.out.println("Got:\n" + result);
-                    System.out.println("Expecting:\n" + expected);
-
-                    assertThat("Result should be consistent according to join type", result, equalTo(expected));
-                } catch (IOException e) {
-                    System.err.println(e.getMessage());
-                    fail("Unable to load results files.");
-                }
+                assertThat("Result should be consistent according to join type" + describe(joinImplementation, joinType),
+                    result, equalTo(expected));
             }
         }
     }
@@ -456,33 +448,23 @@ class JoinTest {
     @Test
     void countsAreCorrect() throws Exception {
 
-        long expectedleftSize = defaultLeftContent.split("\n").length;
-        long expectedrightSize = defaultRightContent.split("\n").length;
+        long expectedLeftSize = defaultLeftContent.split("\n").length;
+        long expectedRightSize = defaultRightContent.split("\n").length;
 
         RunContext runContext = getRunContext(defaultLeftContent, defaultRightContent);
-        Join.Output runOutput = null;
 
         for (JoinImplementation joinImplementation : JoinImplementation.values()) {
             for (JoinType joinType : JoinType.values()) {
                 long expectedResultCount = defaultExpectedResults.get(joinType).split("\n").length;
 
-                try {
-                    runOutput = getOutput(runContext, joinImplementation, joinType);
-                } catch (Exception e) {
-                    fail(e.getMessage() + ", cause: " + e.getCause());
-                }
+                Join.Output runOutput = getOutput(runContext, joinImplementation, joinType);
 
-                long outputSize = runOutput.getOutputSize();
-                long leftSize = runOutput.getLeftSize();
-                long rightSize = runOutput.getRightSize();
-
-                System.out.println("With " + joinImplementation + ", " + joinType + " join: \n");
-                System.out.println("Got:\n" + outputSize);
-                System.out.println("Expecting:\n" + expectedResultCount);
-
-                assertThat("Output count should be equal to expected result count", outputSize, equalTo(expectedResultCount));
-                assertThat("Left count should be correct", leftSize, equalTo(expectedleftSize));
-                assertThat("Right count should be correct", rightSize, equalTo(expectedrightSize));
+                assertThat("Output count should be equal to expected result count" + describe(joinImplementation, joinType),
+                    runOutput.getOutputSize(), equalTo(expectedResultCount));
+                assertThat("Left count should be correct" + describe(joinImplementation, joinType),
+                    runOutput.getLeftSize(), equalTo(expectedLeftSize));
+                assertThat("Right count should be correct" + describe(joinImplementation, joinType),
+                    runOutput.getRightSize(), equalTo(expectedRightSize));
             }
         }
     }
@@ -493,7 +475,7 @@ class JoinTest {
      * This test checks that this use case is not broken, for example by other piece of code than join algorithms.
      */
     @Test
-    void emptyContentIsValid() throws Exception {
+    void emptyContentIsValid() {
 
         Map<String, String[]> contentsBySide =
             Map.of(
@@ -504,27 +486,13 @@ class JoinTest {
 
         for (var testEntry : contentsBySide.entrySet()) {
             RunContext runContext = getRunContext(testEntry.getValue()[0], testEntry.getValue()[1]);
-            Join.Output runOutput = null;
 
             for (JoinImplementation joinImplementation : JoinImplementation.values()) {
                 for (JoinType joinType : JoinType.values()) {
-                    Boolean success = null;
-                    String errorMessage = "";
-
-                    try {
-                        runOutput = getOutput(runContext, joinImplementation, joinType);
-                        success = true;
-                    } catch (Exception e) {
-                        success = false;
-                        errorMessage = e.getMessage();
-                    }
-
-                    System.out.println("With " + joinImplementation + ", " + joinType + " join, " + testEntry.getKey() + " empty input(s): \n");
-                    System.out.println("Got: success: " + success);
-                    if (errorMessage != "") System.out.println("Got error message:\n" + errorMessage);
-                    System.out.println("Expecting: success: true");
-
-                    assertThat("Should not fail with empty inputs", success, equalTo(true));
+                    assertDoesNotThrow(
+                        () -> getOutput(runContext, joinImplementation, joinType),
+                        "Should not fail with " + testEntry.getKey() + " empty input(s)" + describe(joinImplementation, joinType)
+                    );
                 }
             }
         }
@@ -535,7 +503,7 @@ class JoinTest {
      * with a render error naming the property, instead of a missing key error or an empty result.
      */
     @Test
-    void blankKeyThrowRenderError() throws Exception {
+    void blankKeyThrowRenderError() {
 
         RunContext runContext = getRunContext(defaultLeftContent, defaultRightContent);
 
@@ -549,24 +517,16 @@ class JoinTest {
                         );
 
                     for (var testEntry : keysByProperty.entrySet()) {
-                        String errorMessage = "";
                         String expectedError = String.format(Messages.BLANK_PROPERTY, testEntry.getKey());
 
-                        try {
-                            getOutput(runContext,
-                                joinImplementation,
-                                joinType,
-                                testEntry.getValue()[0],
-                                testEntry.getValue()[1]);
-                        } catch (Exception e) {
-                            errorMessage = e.getMessage();
-                        }
+                        Exception exception = assertThrows(Exception.class, () -> getOutput(runContext,
+                            joinImplementation,
+                            joinType,
+                            testEntry.getValue()[0],
+                            testEntry.getValue()[1]));
 
-                        System.out.println("With " + joinImplementation + ", " + joinType + " join, blank value [" + blankValue + "] on " + testEntry.getKey() + ": \n");
-                        System.out.println("Got error message:\n" + errorMessage);
-                        System.out.println("Expecting:\n" + expectedError);
-
-                        assertThat("Should show error for blank property", errorMessage, equalTo(expectedError));
+                        assertThat("Should show error for blank value [" + blankValue + "] on " + testEntry.getKey() + describe(joinImplementation, joinType),
+                            exception.getMessage(), equalTo(expectedError));
                     }
                 }
             }
@@ -578,7 +538,7 @@ class JoinTest {
      * with a render error naming the property, instead of a storage read error.
      */
     @Test
-    void blankInputThrowRenderError() throws Exception {
+    void blankInputThrowRenderError() {
 
         String leftFile = storeContent(defaultLeftContent).toString();
         String rightFile = storeContent(defaultRightContent).toString();
@@ -593,7 +553,6 @@ class JoinTest {
                         );
 
                     for (var testEntry : inputsByProperty.entrySet()) {
-                        String errorMessage = "";
                         String expectedError = String.format(Messages.BLANK_PROPERTY, testEntry.getKey());
 
                         RunContext runContext = this.runContextFactory.of(Map.of(
@@ -601,17 +560,11 @@ class JoinTest {
                             "right", testEntry.getValue()[1]
                         ));
 
-                        try {
-                            getOutput(runContext, joinImplementation, joinType);
-                        } catch (Exception e) {
-                            errorMessage = e.getMessage();
-                        }
+                        Exception exception = assertThrows(Exception.class,
+                            () -> getOutput(runContext, joinImplementation, joinType));
 
-                        System.out.println("With " + joinImplementation + ", " + joinType + " join, blank value [" + blankValue + "] on " + testEntry.getKey() + ": \n");
-                        System.out.println("Got error message:\n" + errorMessage);
-                        System.out.println("Expecting:\n" + expectedError);
-
-                        assertThat("Should show error for blank property", errorMessage, equalTo(expectedError));
+                        assertThat("Should show error for blank value [" + blankValue + "] on " + testEntry.getKey() + describe(joinImplementation, joinType),
+                            exception.getMessage(), equalTo(expectedError));
                     }
                 }
             }
@@ -707,30 +660,16 @@ class JoinTest {
             );
 
         RunContext runContext = getRunContext(leftContent, rightContent);
-        Join.Output runOutput = null;
 
         for (JoinImplementation joinImplementation : JoinImplementation.values()) {
             for (JoinType joinType : JoinType.values()) {
                 String expected = sortIonLines(expectedResults.get(joinType));
 
-                try {
-                    runOutput = getOutput(runContext, joinImplementation, joinType);
-                } catch (Exception e) {
-                    fail(e.getMessage() + ", cause: " + e.getCause());
-                }
+                Join.Output runOutput = getOutput(runContext, joinImplementation, joinType);
+                String result = sortIonLines(readOutput(runOutput));
 
-                try (InputStream streamResult = this.storageInterface.get(tenant, null, runOutput.getUri())) {
-                    String result = sortIonLines(new String(streamResult.readAllBytes(), StandardCharsets.UTF_8));
-
-                    System.out.println("With " + joinImplementation + ", " + joinType + " join: \n");
-                    System.out.println("Got:\n" + result);
-                    System.out.println("Expecting:\n" + expected);
-
-                    assertThat("Result should preserve accents", result, equalTo(expected));
-                } catch (IOException e) {
-                    System.err.println(e.getMessage());
-                    fail("Unable to load results files.");
-                }
+                assertThat("Result should preserve accents" + describe(joinImplementation, joinType),
+                    result, equalTo(expected));
             }
         }
     }
@@ -758,12 +697,10 @@ class JoinTest {
 
         for (JoinImplementation joinImplementation : JoinImplementation.values()) {
             Join.Output runOutput = getOutput(runContext, joinImplementation, JoinType.INNER);
+            String result = sortIonLines(readOutput(runOutput));
 
-            try (InputStream streamResult = this.storageInterface.get(tenant, null, runOutput.getUri())) {
-                String result = sortIonLines(new String(streamResult.readAllBytes(), StandardCharsets.UTF_8));
-
-                assertThat("Values containing \"} {\" should be preserved with " + joinImplementation, result, equalTo(expected));
-            }
+            assertThat("Values containing \"} {\" should be preserved" + describe(joinImplementation, JoinType.INNER),
+                result, equalTo(expected));
         }
     }
 
@@ -795,34 +732,19 @@ class JoinTest {
             {object:{id:5},rightValue:"R5-B"}""";
 
         RunContext runContext = getRunContext(leftContent, rightContent);
-        Join.Output runOutput = null;
 
         for (JoinImplementation joinImplementation : JoinImplementation.values()) {
             for (JoinType joinType : JoinType.values()) {
                 String expected = sortIonLines(defaultExpectedResults.get(joinType));
 
-                try {
-                    runOutput = getOutput(runContext, joinImplementation, joinType, "object.id", "object.id");
-                } catch (Exception e) {
-                    fail(e.getMessage() + ", cause: " + e.getCause());
-                }
+                Join.Output runOutput = getOutput(runContext, joinImplementation, joinType, "object.id", "object.id");
 
-                try (InputStream streamResult = this.storageInterface.get(tenant, null, runOutput.getUri())) {
-                    /*
-                    Result is processed to replace nested field to normal one so it can be compared to default expected results
-                    */
-                    String result = sortIonLines(new String(streamResult.readAllBytes(), StandardCharsets.UTF_8)
-                        .replaceAll("object:\\{id:([^}]+)}", "id:$1"));
+                // Nested field is replaced by a plain one, so the result can be compared to default expected results
+                String result = sortIonLines(readOutput(runOutput)
+                    .replaceAll("object:\\{id:([^}]+)}", "id:$1"));
 
-                    System.out.println("With " + joinImplementation + ", " + joinType + " join: \n");
-                    System.out.println("Got:\n" + result);
-                    System.out.println("Expecting:\n" + expected);
-
-                    assertThat("Result should be joined by using nested keys", result, equalTo(expected));
-                } catch (IOException e) {
-                    System.err.println(e.getMessage());
-                    fail("Unable to load results files.");
-                }
+                assertThat("Result should be joined by using nested keys" + describe(joinImplementation, joinType),
+                    result, equalTo(expected));
             }
         }
     }
@@ -848,7 +770,7 @@ class JoinTest {
             {id:5,value:"R5-A"}
             {id:5,value:"R5-B"}""";
 
-        Map<JoinType , String> prefixedExpectedResults =
+        Map<JoinType, String> prefixedExpectedResults =
             Map.of(
                 JoinType.FULL_OUTER, """
                     {L_id:2,L_value:"L2-A",R_id:2,R_value:"R2-A"}
@@ -916,30 +838,16 @@ class JoinTest {
             );
 
         RunContext runContext = getRunContext(leftContent, rightContent);
-        Join.Output runOutput = null;
 
         for (JoinImplementation joinImplementation : JoinImplementation.values()) {
             for (JoinType joinType : JoinType.values()) {
                 String expected = sortIonLines(prefixedExpectedResults.get(joinType));
 
-                try {
-                    runOutput = getOutputWithLabels(runContext, joinImplementation, joinType, "L", "R", OutputMode.PREFIX);
-                } catch (Exception e) {
-                    fail(e.getMessage() + ", cause: " + e.getCause());
-                }
+                Join.Output runOutput = getOutputWithLabels(runContext, joinImplementation, joinType, "L", "R", OutputMode.PREFIX);
+                String result = sortIonLines(readOutput(runOutput));
 
-                try (InputStream streamResult = this.storageInterface.get(tenant, null, runOutput.getUri())) {
-                    String result = sortIonLines(new String(streamResult.readAllBytes(), StandardCharsets.UTF_8));
-
-                    System.out.println("With " + joinImplementation + ", " + joinType + " join: \n");
-                    System.out.println("Got:\n" + result);
-                    System.out.println("Expecting:\n" + expected);
-
-                    assertThat("Result should have renamed fields from left and right", result, equalTo(expected));
-                } catch (IOException e) {
-                    System.err.println(e.getMessage());
-                    fail("Unable to load results files.");
-                }
+                assertThat("Result should have renamed fields from left and right" + describe(joinImplementation, joinType),
+                    result, equalTo(expected));
             }
         }
     }
@@ -965,7 +873,7 @@ class JoinTest {
             {id:5,value:"R5-A"}
             {id:5,value:"R5-B"}""";
 
-        Map<JoinType , String> nestedExpectedResults =
+        Map<JoinType, String> nestedExpectedResults =
             Map.of(
                 JoinType.FULL_OUTER, """
                     {left:{id:2,value:"L2-A"},right:{id:2,value:"R2-A"}}
@@ -1033,30 +941,16 @@ class JoinTest {
             );
 
         RunContext runContext = getRunContext(leftContent, rightContent);
-        Join.Output runOutput = null;
 
         for (JoinImplementation joinImplementation : JoinImplementation.values()) {
             for (JoinType joinType : JoinType.values()) {
                 String expected = sortIonLines(nestedExpectedResults.get(joinType));
 
-                try {
-                    runOutput = getOutputWithLabels(runContext, joinImplementation, joinType, "left", "right", OutputMode.NEST);
-                } catch (Exception e) {
-                    fail(e.getMessage() + ", cause: " + e.getCause());
-                }
+                Join.Output runOutput = getOutputWithLabels(runContext, joinImplementation, joinType, "left", "right", OutputMode.NEST);
+                String result = sortIonLines(readOutput(runOutput));
 
-                try (InputStream streamResult = this.storageInterface.get(tenant, null, runOutput.getUri())) {
-                    String result = sortIonLines(new String(streamResult.readAllBytes(), StandardCharsets.UTF_8));
-
-                    System.out.println("With " + joinImplementation + ", " + joinType + " join: \n");
-                    System.out.println("Got:\n" + result);
-                    System.out.println("Expecting:\n" + expected);
-
-                    assertThat("Result should be nested", result, equalTo(expected));
-                } catch (IOException e) {
-                    System.err.println(e.getMessage());
-                    fail("Unable to load results files.");
-                }
+                assertThat("Result should be nested" + describe(joinImplementation, joinType),
+                    result, equalTo(expected));
             }
         }
     }
@@ -1068,7 +962,7 @@ class JoinTest {
     @Test
     void onlyFirstMatchOnSemiOptionIsManaged() throws Exception {
 
-        Map<JoinType , String> onlyFirstMatchExpectedResults =
+        Map<JoinType, String> onlyFirstMatchExpectedResults =
             Map.of(
                 JoinType.LEFT_SEMI, """
                     {id:2,leftValue:"L2-A"}
@@ -1090,30 +984,16 @@ class JoinTest {
         };
 
         RunContext runContext = getRunContext(defaultLeftContent, defaultRightContent);
-        Join.Output runOutput = null;
 
         for (JoinImplementation joinImplementation : JoinImplementation.values()) {
             for (JoinType joinType : semiJoinTypes) {
                 String expected = sortIonLines(onlyFirstMatchExpectedResults.get(joinType));
 
-                try {
-                    runOutput = getOutputWithOnlyFirstMatchOnSemiOnly(runContext, joinImplementation, joinType, true);
-                } catch (Exception e) {
-                    fail(e.getMessage() + ", cause: " + e.getCause());
-                }
+                Join.Output runOutput = getOutputWithOnlyFirstMatchOnSemiOnly(runContext, joinImplementation, joinType, true);
+                String result = sortIonLines(readOutput(runOutput));
 
-                try (InputStream streamResult = this.storageInterface.get(tenant, null, runOutput.getUri())) {
-                    String result = sortIonLines(new String(streamResult.readAllBytes(), StandardCharsets.UTF_8));
-
-                    System.out.println("With " + joinImplementation + ", " + joinType + " join: \n");
-                    System.out.println("Got:\n" + result);
-                    System.out.println("Expecting:\n" + expected);
-
-                    assertThat("Result should have only first matches with semi joins by using corresponding option", result, equalTo(expected));
-                } catch (IOException e) {
-                    System.err.println(e.getMessage());
-                    fail("Unable to load results files.");
-                }
+                assertThat("Result should have only first matches with semi joins by using corresponding option" + describe(joinImplementation, joinType),
+                    result, equalTo(expected));
             }
         }
     }
@@ -1139,7 +1019,7 @@ class JoinTest {
             {id:5,rightValue:"R5-A"}
             {id:5,rightValue:"R5-B"}""";
 
-        Map<JoinType , String> expectedResults =
+        Map<JoinType, String> expectedResults =
             Map.of(
                 JoinType.FULL_OUTER, """
                     {id:1,leftValue:"L1"}
@@ -1195,30 +1075,16 @@ class JoinTest {
             );
 
         RunContext runContext = getRunContext(leftContent, rightContent);
-        Join.Output runOutput = null;
 
         for (JoinImplementation joinImplementation : JoinImplementation.values()) {
             for (JoinType joinType : JoinType.values()) {
                 String expected = sortIonLines(expectedResults.get(joinType));
 
-                try {
-                    runOutput = getOutput(runContext, joinImplementation, joinType, MissingKeyAction.IGNORE);
-                } catch (Exception e) {
-                    fail(e.getMessage() + ", cause: " + e.getCause());
-                }
+                Join.Output runOutput = getOutput(runContext, joinImplementation, joinType, MissingKeyAction.IGNORE);
+                String result = sortIonLines(readOutput(runOutput));
 
-                try (InputStream streamResult = this.storageInterface.get(tenant, null, runOutput.getUri())) {
-                    String result = sortIonLines(new String(streamResult.readAllBytes(), StandardCharsets.UTF_8));
-
-                    System.out.println("With " + joinImplementation + ", " + joinType + " join: \n");
-                    System.out.println("Got:\n" + result);
-                    System.out.println("Expecting:\n" + expected);
-
-                    assertThat("Result should have no match between null values", result, equalTo(expected));
-                } catch (IOException e) {
-                    System.err.println(e.getMessage());
-                    fail("Unable to load results files.");
-                }
+                assertThat("Result should have no match between null values" + describe(joinImplementation, joinType),
+                    result, equalTo(expected));
             }
         }
     }
@@ -1259,7 +1125,7 @@ class JoinTest {
                     Join.Output runOutput = getOutput(runContext, joinImplementation, joinType, testEntry.getKey());
 
                     assertThat(
-                        "Final state with " + testEntry.getKey() + " on missing key, " + joinImplementation + ", " + joinType + " join",
+                        "Final state with " + testEntry.getKey() + " on missing key" + describe(joinImplementation, joinType),
                         runOutput.finalState(),
                         equalTo(testEntry.getValue())
                     );
@@ -1280,7 +1146,7 @@ class JoinTest {
      */
     @Test
     void validTaskHasNoViolation() {
-        Join task = validTaskBuilder().build();
+        Join task = taskBuilder(defaultKey, defaultKey).build();
 
         assertThat("Task should be valid", modelValidator.isValid(task).isEmpty(), is(true));
     }
@@ -1290,7 +1156,7 @@ class JoinTest {
      */
     @Test
     void identicalLabelsAreRejected() {
-        Join task = validTaskBuilder()
+        Join task = taskBuilder(defaultKey, defaultKey)
             .leftLabel("same")
             .rightLabel("same")
             .build();
@@ -1306,7 +1172,7 @@ class JoinTest {
      */
     @Test
     void blankLabelIsRejected() {
-        Join task = validTaskBuilder()
+        Join task = taskBuilder(defaultKey, defaultKey)
             .leftLabel("   ")
             .build();
 
@@ -1326,7 +1192,7 @@ class JoinTest {
      * Tests that task fails if key field is missing in one or both data input(s).
      */
     @Test
-    void missingKeyFailsByDefault() throws Exception {
+    void missingKeyFailsByDefault() {
 
         String leftContent = """
             {id:1,leftValue:"L1"}
@@ -1350,26 +1216,18 @@ class JoinTest {
                 "BOTH", new String[] { leftContent, rightContent }
             );
 
+        String expectedErrorPattern = String.format(Messages.MISSING_KEY, "id", "(LEFT|RIGHT|BOTH)", ".*");
+
         for (var testEntry : contentsBySide.entrySet()) {
             RunContext runContext = getRunContext(testEntry.getValue()[0], testEntry.getValue()[1]);
-            Join.Output runOutput = null;
 
             for (JoinImplementation joinImplementation : JoinImplementation.values()) {
                 for (JoinType joinType : JoinType.values()) {
-                    String errorMessage = "";
-                    String expectedErrorPattern = String.format(Messages.MISSING_KEY, "id", "(LEFT|RIGHT|BOTH)", ".*");
+                    Exception exception = assertThrows(Exception.class,
+                        () -> getOutput(runContext, joinImplementation, joinType));
 
-                    try {
-                        runOutput = getOutput(runContext, joinImplementation, joinType);
-                    } catch (Exception e) {
-                        errorMessage = e.getMessage();
-                    }
-
-                    System.out.println("With " + joinImplementation + ", " + joinType + " join, " + testEntry.getKey() + " missing key:\n");
-                    System.out.println("Got error message:\n" + errorMessage);
-                    System.out.println("Expecting error pattern:\n" + expectedErrorPattern);
-
-                    assertThat("Should show specific error", errorMessage, matchesPattern(expectedErrorPattern));
+                    assertThat("Should show specific error for " + testEntry.getKey() + " missing key" + describe(joinImplementation, joinType),
+                        exception.getMessage(), matchesPattern(expectedErrorPattern));
                 }
             }
         }
@@ -1380,7 +1238,7 @@ class JoinTest {
      * Should throw a specific error.
      */
     @Test
-    void invalidTypeThrowError() throws Exception {
+    void invalidTypeThrowError() {
 
         String leftContent = """
             {id:{{OiBTIKUgTyAASb8=}},leftValue:"L1"}
@@ -1405,24 +1263,15 @@ class JoinTest {
 
         for (var testEntry : contentsBySide.entrySet()) {
             RunContext runContext = getRunContext(testEntry.getValue()[0], testEntry.getValue()[1]);
-            Join.Output runOutput = null;
+            String expectedError = String.format(Messages.UNPROCESSABLE_KEY_TYPE, "id", testEntry.getKey());
 
             for (JoinImplementation joinImplementation : JoinImplementation.values()) {
                 for (JoinType joinType : JoinType.values()) {
-                    String errorMessage = "";
-                    String expectedError = String.format(Messages.UNPROCESSABLE_KEY_TYPE, "id", testEntry.getKey());
+                    Exception exception = assertThrows(Exception.class,
+                        () -> getOutput(runContext, joinImplementation, joinType));
 
-                    try {
-                        runOutput = getOutput(runContext, joinImplementation, joinType);
-                    } catch (Exception e) {
-                        errorMessage = e.getMessage();
-                    }
-
-                    System.out.println("With " + joinImplementation + ", " + joinType + " join, invalid type on " + testEntry.getKey() + "\n");
-                    System.out.println("Got error message:\n" + errorMessage);
-                    System.out.println("Expecting error message:\n" + expectedError);
-
-                    assertThat("Should show specific error", errorMessage, equalTo(expectedError));
+                    assertThat("Should show specific error for invalid type on " + testEntry.getKey() + describe(joinImplementation, joinType),
+                        exception.getMessage(), equalTo(expectedError));
                 }
             }
         }
@@ -1433,7 +1282,7 @@ class JoinTest {
      * Only sorted merge implementation must fail because of impossible sort.
      */
     @Test
-    void differentTypesFromSameSideBreaksSortedMergeOnly() throws Exception {
+    void differentTypesFromSameSideBreaksSortedMergeOnly() {
 
         String leftContent = """
             {id:1,leftValue:"L1"}
@@ -1456,37 +1305,26 @@ class JoinTest {
                 "RIGHT", new String[] { defaultLeftContent, rightContent }
             );
 
+        String expectedErrorPattern = Messages.DIFFERENT_TYPES.replaceAll("%s", ".*");
+
         for (var testEntry : contentsBySide.entrySet()) {
             RunContext runContext = getRunContext(testEntry.getValue()[0], testEntry.getValue()[1]);
-            Join.Output runOutput = null;
 
             for (JoinImplementation joinImplementation : JoinImplementation.values()) {
                 for (JoinType joinType : JoinType.values()) {
-                    Boolean success = null;
-                    String errorMessage = "";
-                    String expectedErrorPattern = Messages.DIFFERENT_TYPES.replaceAll("%s", ".*");
-
-                    try {
-                        runOutput = getOutput(runContext, joinImplementation, joinType);
-                        success = true;
-                    } catch (Exception e) {
-                        success = false;
-                        errorMessage = e.getMessage();
-                    }
-
-                    System.out.println("With " + joinImplementation + ", " + joinType + " join, invalid type on " + testEntry.getKey() + "\n");
+                    String testCase = " on " + testEntry.getKey() + describe(joinImplementation, joinType);
 
                     if (joinImplementation == JoinImplementation.SORTED_MERGE) {
-                        System.out.println("Got error message:\n" + errorMessage);
-                        System.out.println("Expecting error message pattern:\n" + expectedErrorPattern);
+                        Exception exception = assertThrows(Exception.class,
+                            () -> getOutput(runContext, joinImplementation, joinType));
 
-                        assertThat("Should show specific error", errorMessage, matchesPattern(expectedErrorPattern));
+                        assertThat("Should show specific error" + testCase,
+                            exception.getMessage(), matchesPattern(expectedErrorPattern));
                     } else {
-                        System.out.println("Got: success: " + success);
-                        if (errorMessage != "") System.out.println("Got error message:\n" + errorMessage);
-                        System.out.println("Expecting: success: true");
-
-                        assertThat("Should not fail for other implementations than sorted merge", success, equalTo(true));
+                        assertDoesNotThrow(
+                            () -> getOutput(runContext, joinImplementation, joinType),
+                            "Should not fail for other implementations than sorted merge" + testCase
+                        );
                     }
                 }
             }
@@ -1498,7 +1336,7 @@ class JoinTest {
      * Only sorted merge implementation must fail because of impossible join.
      */
     @Test
-    void differentTypesBetweenSidesBreaksSortedMergeOnly() throws Exception {
+    void differentTypesBetweenSidesBreaksSortedMergeOnly() {
 
         String rightContent = """
             {id:2.0,rightValue:"R2-A"}
@@ -1508,36 +1346,23 @@ class JoinTest {
             {id:5.1,rightValue:"R5-A"}
             {id:5.0,rightValue:"R5-B"}""";
 
+        String expectedErrorPattern = Messages.DIFFERENT_TYPES.replaceAll("%s", ".*");
+
         RunContext runContext = getRunContext(defaultLeftContent, rightContent);
-        Join.Output runOutput = null;
 
         for (JoinImplementation joinImplementation : JoinImplementation.values()) {
             for (JoinType joinType : JoinType.values()) {
-                Boolean success = null;
-                String errorMessage = "";
-                String expectedErrorPattern = Messages.DIFFERENT_TYPES.replaceAll("%s", ".*");
-
-                try {
-                    runOutput = getOutput(runContext, joinImplementation, joinType);
-                    success = true;
-                } catch (Exception e) {
-                    success = false;
-                    errorMessage = e.getMessage();
-                }
-
-                System.out.println("With " + joinImplementation + ", " + joinType + " join:\n");
-
                 if (joinImplementation == JoinImplementation.SORTED_MERGE) {
-                    System.out.println("Got error message:\n" + errorMessage);
-                    System.out.println("Expecting error message pattern:\n" + expectedErrorPattern);
+                    Exception exception = assertThrows(Exception.class,
+                        () -> getOutput(runContext, joinImplementation, joinType));
 
-                    assertThat("Should show specific error", errorMessage, matchesPattern(expectedErrorPattern));
+                    assertThat("Should show specific error" + describe(joinImplementation, joinType),
+                        exception.getMessage(), matchesPattern(expectedErrorPattern));
                 } else {
-                    System.out.println("Got: success: " + success);
-                    if (errorMessage != "") System.out.println("Got error message:\n" + errorMessage);
-                    System.out.println("Expecting: success: true");
-
-                    assertThat("Should not fail for other implementations than sorted merge", success, equalTo(true));
+                    assertDoesNotThrow(
+                        () -> getOutput(runContext, joinImplementation, joinType),
+                        "Should not fail for other implementations than sorted merge" + describe(joinImplementation, joinType)
+                    );
                 }
             }
         }
@@ -1548,7 +1373,7 @@ class JoinTest {
      * Should throw a specific error.
      */
     @Test
-    void unreachableKeyDepthThrowError() throws Exception {
+    void unreachableKeyDepthThrowError() {
 
         Map<String, String[]> testKeysBySide =
             Map.of(
@@ -1557,25 +1382,17 @@ class JoinTest {
             );
 
         RunContext runContext = getRunContext(defaultLeftContent, defaultRightContent);
-        Join.Output runOutput = null;
 
         for (JoinImplementation joinImplementation : JoinImplementation.values()) {
             for (JoinType joinType : JoinType.values()) {
                 for (var testEntry : testKeysBySide.entrySet()) {
-                    String errorMessage = "";
                     String expectedError = String.format(Messages.UNREACHABLE_KEY_DEPTH, "id.x", testEntry.getKey());
 
-                    try {
-                        runOutput = getOutput(runContext, joinImplementation, joinType, testEntry.getValue()[0], testEntry.getValue()[1]);
-                    } catch (Exception e) {
-                        errorMessage = e.getMessage();
-                    }
+                    Exception exception = assertThrows(Exception.class,
+                        () -> getOutput(runContext, joinImplementation, joinType, testEntry.getValue()[0], testEntry.getValue()[1]));
 
-                    System.out.println("With " + joinImplementation + ", " + joinType + " join, " + testEntry.getKey() + " invalid key: \n");
-                    System.out.println("Got error message:\n" + errorMessage);
-                    System.out.println("Expecting error message:\n" + expectedError);
-
-                    assertThat("Should show specific error", errorMessage, equalTo(expectedError));
+                    assertThat("Should show specific error for " + testEntry.getKey() + " invalid key" + describe(joinImplementation, joinType),
+                        exception.getMessage(), equalTo(expectedError));
                 }
             }
         }
@@ -1586,7 +1403,7 @@ class JoinTest {
      * Should throw a specific error.
      */
     @Test
-    void objectKeyThrowError() throws Exception {
+    void objectKeyThrowError() {
 
         String leftContent = """
             {object:{id:1},leftValue:"L1"}
@@ -1610,25 +1427,17 @@ class JoinTest {
             );
 
         RunContext runContext = getRunContext(leftContent, rightContent);
-        Join.Output runOutput = null;
 
         for (JoinImplementation joinImplementation : JoinImplementation.values()) {
             for (JoinType joinType : JoinType.values()) {
                 for (var testEntry : testKeysBySide.entrySet()) {
-                    String errorMessage = "";
                     String expectedError = String.format(Messages.KEY_VALUE_IS_OBJECT, "object", testEntry.getKey());
 
-                    try {
-                        runOutput = getOutput(runContext, joinImplementation, joinType, testEntry.getValue()[0], testEntry.getValue()[1]);
-                    } catch (Exception e) {
-                        errorMessage = e.getMessage();
-                    }
+                    Exception exception = assertThrows(Exception.class,
+                        () -> getOutput(runContext, joinImplementation, joinType, testEntry.getValue()[0], testEntry.getValue()[1]));
 
-                    System.out.println("With " + joinImplementation + ", " + joinType + " join, " + testEntry.getKey() + " invalid key: \n");
-                    System.out.println("Got error message:\n" + errorMessage);
-                    System.out.println("Expecting error message:\n" + expectedError);
-
-                    assertThat("Should show specific error", errorMessage, equalTo(expectedError));
+                    assertThat("Should show specific error for " + testEntry.getKey() + " invalid key" + describe(joinImplementation, joinType),
+                        exception.getMessage(), equalTo(expectedError));
                 }
             }
         }
