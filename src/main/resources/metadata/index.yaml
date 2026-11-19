@@ -1,8 +1,8 @@
-group: io.kestra.plugin.templates
-name: "template"
-title: "Template"
-description: "Plugin template for Kestra"
-body: ""
+group: io.kestra.plugin.join
+name: "join"
+title: "Join"
+description: "Plugin to join two ION files with various join operations."
+body: "Supports multiple join types (inner, full outer...) and algorithms (hash join, sorted merge, nested loop). Allows to configure output structure to differenciate fields by side (overwriting, prefixing, nesting)."
 videos: []
-createdBy: "Kestra Core Team"
-managedBy: "Kestra Core Team"
+createdBy: "IUT de Toulouse"
+managedBy: "IUT de Toulouse"
