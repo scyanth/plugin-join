@@ -18,11 +18,13 @@ import com.amazon.ion.system.IonSystemBuilder;
 import com.amazon.ion.system.IonTextWriterBuilder;
 import com.amazon.ion.IonStruct;
 
+import java.io.BufferedOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.File;
+import java.io.OutputStream;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Set;
 import java.util.HashSet;
 
@@ -30,8 +32,9 @@ import org.slf4j.Logger;
 
 /**
  * Layer to handle I/O operations with Kestra run context and ION formatting.
+ * Holds open input and output streams: always close it, e.g. with try-with-resources.
  */
-public class JoinIOHandler {
+public class JoinIOHandler implements AutoCloseable {
 
     /** Kestra run context. */
     private RunContext kestraContext;
@@ -81,19 +84,24 @@ public class JoinIOHandler {
     /** ION writer for output. */
     private IonWriter ionWriter;
 
-    /** Data stream of output. */
-    private ByteArrayOutputStream outputStream;
+    /** Temporary output file in the task working directory. */
+    private Path outputFile;
+
+    /** Data stream of output file. */
+    private OutputStream outputStream;
 
     /** State of task. */
     private JoinState state;
 
     /**
      * Creates a new JoinIOHandler.
+     * Opens both inputs and a temporary output file; everything already opened is closed if a later step fails.
      * @param kestraContext Kestra run context.
      * @param leftUri URI of left input file.
      * @param rightUri URI of right input file.
      * @param leftLabel Label for left fields in output.
      * @param rightLabel Label for right fields in output.
+     * @param prefixSeparator Separator character for prefixes.
      * @param outputMode Output mode.
      */
     public JoinIOHandler(
@@ -117,21 +125,39 @@ public class JoinIOHandler {
         logger = kestraContext.logger();
 
         outputSize = 0;
-        leftSize = 0;
-        rightSize = 0;
 
         state = JoinState.SUCCESS;
 
         ionSystem = IonSystemBuilder.standard().build();
 
-        leftIonReader = createInputReader(leftUri);
-        rightIonReader = createInputReader(rightUri);
-
-        outputStream = new ByteArrayOutputStream();
-        ionWriter = IonTextWriterBuilder.standard().withCharset(IonTextWriterBuilder.UTF8).build(outputStream);
-
         leftSize = countInputRows(Side.LEFT);
         rightSize = countInputRows(Side.RIGHT);
+
+        try {
+            leftIonReader = createInputReader(leftUri);
+            rightIonReader = createInputReader(rightUri);
+
+            try {
+                outputFile = kestraContext.workingDir().createTempFile(".ion");
+                outputStream = new BufferedOutputStream(Files.newOutputStream(outputFile));
+            } catch (IOException e) {
+                throw new StorageException(e);
+            }
+
+            // One row per line, without patching the text afterwards (string values may contain "} {").
+            ionWriter = IonTextWriterBuilder.standard()
+                .withCharset(IonTextWriterBuilder.UTF8)
+                .withWriteTopLevelValuesOnNewLines(true)
+                .withNewLineType(IonTextWriterBuilder.NewLineType.LF)
+                .build(outputStream);
+        } catch (RuntimeException e) {
+            try {
+                close();
+            } catch (Exception closeException) {
+                e.addSuppressed(closeException);
+            }
+            throw e;
+        }
     }
 
     /**
@@ -308,20 +334,13 @@ public class JoinIOHandler {
     }
 
     /**
-     * Creates a file from the output stream and stores it in the Kestra storage.
+     * Completes the output file and stores it in the Kestra storage.
      * @return URI of the output file.
      */
     public URI storeOutputFile() {
         try {
-            ionWriter.finish();
-            String resultContent = "";
-
-            if (outputStream.size() != 0) {
-                resultContent = outputStream.toString(StandardCharsets.UTF_8).replace("} {", "}\n{") + "\n";
-            }
-
-            File tempFile = kestraContext.workingDir().createTempFile(resultContent.getBytes(), ".ion").toFile();
-            outputUri = kestraContext.storage().putFile(tempFile);
+            closeWriter();
+            outputUri = kestraContext.storage().putFile(outputFile.toFile());
 
             return outputUri;
 
@@ -331,17 +350,64 @@ public class JoinIOHandler {
     }
 
     /**
+     * Closes the inputs and the output file. Safe to call more than once.
+     * @throws IOException If a stream cannot be closed.
+     */
+    @Override
+    public void close() throws IOException {
+        try {
+            closeWriter();
+        } finally {
+            try {
+                if (leftIonReader != null) leftIonReader.close();
+            } finally {
+                leftIonReader = null;
+                try {
+                    if (rightIonReader != null) rightIonReader.close();
+                } finally {
+                    rightIonReader = null;
+                }
+            }
+        }
+    }
+
+    /**
+     * Flushes and closes the ION writer and the output file stream, if still open.
+     * @throws IOException If the output cannot be written or closed.
+     */
+    private void closeWriter() throws IOException {
+        try {
+            if (ionWriter != null) ionWriter.close();
+        } finally {
+            ionWriter = null;
+            if (outputStream != null) {
+                OutputStream stream = outputStream;
+                outputStream = null;
+                stream.close();
+            }
+        }
+    }
+
+    /**
      * Fetch input file from Kestra storage and creates a ION reader from it.
      * @param inputUri URI of input file.
-     * @return ION reader for the input.
+     * @return ION reader for the input, to be closed by the caller.
      */
     private IterableIonReader createInputReader(URI inputUri) {
+        InputStream inputStream = null;
         try {
-            InputStream inputStream = kestraContext
+            inputStream = kestraContext
                 .storage()
                 .getFile(inputUri);
             return new IterableIonReader(inputStream, ionSystem);
-         } catch (Exception e) {
+        } catch (Exception e) {
+            if (inputStream != null) {
+                try {
+                    inputStream.close();
+                } catch (IOException closeException) {
+                    e.addSuppressed(closeException);
+                }
+            }
             throw new ReadException(inputUri.toString(), e);
         }
     }
@@ -352,19 +418,15 @@ public class JoinIOHandler {
      * @return Number of rows.
      */
     private long countInputRows(Side side) {
-        IterableIonReader reader = side == Side.LEFT ?
-            createInputReader(leftUri) :
-            createInputReader(rightUri);
-
+        URI inputUri = side == Side.LEFT ? leftUri : rightUri;
         long count = 0;
 
-        for (IonStruct ignored : reader) {
-            count++;
-            if (side == Side.LEFT) {
-                leftSize++;
-            } else {
-                rightSize++;
+        try (IterableIonReader reader = createInputReader(inputUri)) {
+            for (IonStruct ignored : reader) {
+                count++;
             }
+        } catch (IOException e) {
+            throw new ReadException(inputUri.toString(), e);
         }
 
         if (count < 1) warn(String.format(Messages.EMPTY_INPUT, side.toString()));

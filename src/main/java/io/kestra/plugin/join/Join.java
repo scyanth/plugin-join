@@ -311,7 +311,7 @@ public class Join extends Task implements RunnableTask<Join.Output> {
         boolean rOnlyFirstMatchOnSemi =          render(onlyFirstMatchOnSemi, Boolean.class, "onlyFirstMatchOnSemi", runContext);
         MissingKeyAction rOnMissingKey =         render(onMissingKey, MissingKeyAction.class, "onMissingKey", runContext);
 
-        JoinIOHandler ioHandler = new JoinIOHandler(
+        try (JoinIOHandler ioHandler = new JoinIOHandler(
             runContext,
             rLeft,
             rRight,
@@ -319,64 +319,65 @@ public class Join extends Task implements RunnableTask<Join.Output> {
             rightLabel,
             prefixSeparator,
             rOutputMode
-        );
+        )) {
 
-        long leftSize = ioHandler.getInputCount(Side.LEFT);
-        long rightSize = ioHandler.getInputCount(Side.RIGHT);
+            long leftSize = ioHandler.getInputCount(Side.LEFT);
+            long rightSize = ioHandler.getInputCount(Side.RIGHT);
 
-        JoinKey leftJoinKey = new JoinKey(rLeftKey, Side.LEFT, rOnMissingKey, ioHandler);
-        JoinKey rightJoinKey = new JoinKey(rRightKey, Side.RIGHT, rOnMissingKey, ioHandler);
+            JoinKey leftJoinKey = new JoinKey(rLeftKey, Side.LEFT, rOnMissingKey, ioHandler);
+            JoinKey rightJoinKey = new JoinKey(rRightKey, Side.RIGHT, rOnMissingKey, ioHandler);
 
-        switch (rJoinImplementation) {
-            case HASH:
-                HashJoin hashJoin = new HashJoin(
-                    ioHandler,
-                    leftJoinKey,
-                    rightJoinKey,
-                    rJoinType,
-                    rOnlyFirstMatchOnSemi
-                );
+            switch (rJoinImplementation) {
+                case HASH:
+                    HashJoin hashJoin = new HashJoin(
+                        ioHandler,
+                        leftJoinKey,
+                        rightJoinKey,
+                        rJoinType,
+                        rOnlyFirstMatchOnSemi
+                    );
 
-                hashJoin.join();
+                    hashJoin.join();
 
-                break;
-            case NESTED_LOOP:
-                NestedLoopJoin nestedLoop = new NestedLoopJoin(
-                    ioHandler,
-                    leftJoinKey,
-                    rightJoinKey,
-                    rJoinType,
-                    rOnlyFirstMatchOnSemi
-                );
+                    break;
+                case NESTED_LOOP:
+                    NestedLoopJoin nestedLoop = new NestedLoopJoin(
+                        ioHandler,
+                        leftJoinKey,
+                        rightJoinKey,
+                        rJoinType,
+                        rOnlyFirstMatchOnSemi
+                    );
 
-                nestedLoop.join();
+                    nestedLoop.join();
 
-                break;
-            case SORTED_MERGE:
-                SortedMergeJoin sortedMerge = new SortedMergeJoin(
-                    ioHandler,
-                    leftJoinKey,
-                    rightJoinKey,
-                    rJoinType,
-                    rOnlyFirstMatchOnSemi
-                );
+                    break;
+                case SORTED_MERGE:
+                    SortedMergeJoin sortedMerge = new SortedMergeJoin(
+                        ioHandler,
+                        leftJoinKey,
+                        rightJoinKey,
+                        rJoinType,
+                        rOnlyFirstMatchOnSemi
+                    );
 
-                sortedMerge.join();
+                    sortedMerge.join();
 
-                break;
+                    break;
+            }
+
+            URI result = ioHandler.storeOutputFile();
+            long outputSize = ioHandler.getOutputSize();
+            JoinState state = ioHandler.getState();
+
+            return Output.builder()
+                .uri(result)
+                .outputSize(outputSize)
+                .leftSize(leftSize)
+                .rightSize(rightSize)
+                .state(state)
+                .build();
         }
-
-        URI result = ioHandler.storeOutputFile();
-        long outputSize = ioHandler.getOutputSize();
-        JoinState state = ioHandler.getState();
-
-        return Output.builder()
-            .uri(result)
-            .outputSize(outputSize)
-            .leftSize(leftSize)
-            .rightSize(rightSize)
-            .state(state)
-            .build();
     }
 
     /**

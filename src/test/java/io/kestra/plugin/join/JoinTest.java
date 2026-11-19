@@ -712,6 +712,38 @@ class JoinTest {
         }
     }
 
+    /**
+     * Tests that string values containing "} {" are written unchanged.
+     * Regression test: rows used to be split on this sequence in the whole output text, values included.
+     */
+    @Test
+    void curlyBracesInValuesArePreserved() throws Exception {
+
+        String leftContent = """
+            {id:1,leftValue:"a} {b"}
+            {id:2,leftValue:"} {"}""";
+
+        String rightContent = """
+            {id:1,rightValue:"x"}
+            {id:2,rightValue:"y"}""";
+
+        String expected = sortIonLines("""
+            {id:1,leftValue:"a} {b",rightValue:"x"}
+            {id:2,leftValue:"} {",rightValue:"y"}""");
+
+        RunContext runContext = getRunContext(leftContent, rightContent);
+
+        for (JoinImplementation joinImplementation : JoinImplementation.values()) {
+            Join.Output runOutput = getOutput(runContext, joinImplementation, JoinType.INNER);
+
+            try (InputStream streamResult = this.storageInterface.get(tenant, null, runOutput.getUri())) {
+                String result = sortIonLines(new String(streamResult.readAllBytes(), StandardCharsets.UTF_8));
+
+                assertThat("Values containing \"} {\" should be preserved with " + joinImplementation, result, equalTo(expected));
+            }
+        }
+    }
+
     /*
     ---------------------------------------------------------------------------------------
     Tests of extended features
