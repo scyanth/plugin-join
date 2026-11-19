@@ -13,7 +13,6 @@ import io.kestra.plugin.join.util.MissingKeyAction;
 import io.kestra.plugin.join.util.JoinState;
 import io.kestra.plugin.join.exception.RenderException;
 import io.kestra.plugin.join.exception.BlankPropertyException;
-import io.kestra.plugin.join.util.Messages;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
@@ -302,40 +301,40 @@ public class Join extends Task implements RunnableTask<Join.Output> {
     /** {@inheritDoc} */
     @Override
     public Join.Output run(RunContext runContext) throws Exception {
-        URI renderedLeft =                              requireNonBlank(render(left, URI.class, "left", runContext), "left");
-        URI renderedRight =                             requireNonBlank(render(right, URI.class, "right", runContext), "right");
-        String renderedLeftKey =                        requireNonBlank(render(leftKey, String.class, "leftKey", runContext), "leftKey");
-        String renderedRightKey =                       requireNonBlank(render(rightKey, String.class, "rightKey", runContext), "rightKey");
-        JoinImplementation renderedJoinImplementation = render(joinImplementation, JoinImplementation.class, "joinImplementation", runContext);
-        JoinType renderedJoinType =                     render(joinType, JoinType.class, "joinType", runContext);
-        OutputMode renderedOutputMode =                 render(outputMode, OutputMode.class, "outputMode", runContext);
-        boolean renderedOnlyFirstMatchOnSemi =          render(onlyFirstMatchOnSemi, Boolean.class, "onlyFirstMatchOnSemi", runContext);
-        MissingKeyAction renderedOnMissingKey =         render(onMissingKey, MissingKeyAction.class, "onMissingKey", runContext);
+        URI rLeft =                              requireNonBlank(render(left, URI.class, "left", runContext), "left");
+        URI rRight =                             requireNonBlank(render(right, URI.class, "right", runContext), "right");
+        String rLeftKey =                        requireNonBlank(render(leftKey, String.class, "leftKey", runContext), "leftKey");
+        String rRightKey =                       requireNonBlank(render(rightKey, String.class, "rightKey", runContext), "rightKey");
+        JoinImplementation rJoinImplementation = render(joinImplementation, JoinImplementation.class, "joinImplementation", runContext);
+        JoinType rJoinType =                     render(joinType, JoinType.class, "joinType", runContext);
+        OutputMode rOutputMode =                 render(outputMode, OutputMode.class, "outputMode", runContext);
+        boolean rOnlyFirstMatchOnSemi =          render(onlyFirstMatchOnSemi, Boolean.class, "onlyFirstMatchOnSemi", runContext);
+        MissingKeyAction rOnMissingKey =         render(onMissingKey, MissingKeyAction.class, "onMissingKey", runContext);
 
         JoinIOHandler ioHandler = new JoinIOHandler(
             runContext,
-            renderedLeft,
-            renderedRight,
+            rLeft,
+            rRight,
             leftLabel,
             rightLabel,
             prefixSeparator,
-            renderedOutputMode
+            rOutputMode
         );
 
         long leftSize = ioHandler.getInputCount(Side.LEFT);
         long rightSize = ioHandler.getInputCount(Side.RIGHT);
 
-        JoinKey leftJoinKey = new JoinKey(renderedLeftKey, Side.LEFT, renderedOnMissingKey, ioHandler);
-        JoinKey rightJoinKey = new JoinKey(renderedRightKey, Side.RIGHT, renderedOnMissingKey, ioHandler);
+        JoinKey leftJoinKey = new JoinKey(rLeftKey, Side.LEFT, rOnMissingKey, ioHandler);
+        JoinKey rightJoinKey = new JoinKey(rRightKey, Side.RIGHT, rOnMissingKey, ioHandler);
 
-        switch (renderedJoinImplementation) {
+        switch (rJoinImplementation) {
             case HASH:
                 HashJoin hashJoin = new HashJoin(
                     ioHandler,
                     leftJoinKey,
                     rightJoinKey,
-                    renderedJoinType,
-                    renderedOnlyFirstMatchOnSemi
+                    rJoinType,
+                    rOnlyFirstMatchOnSemi
                 );
 
                 hashJoin.join();
@@ -346,8 +345,8 @@ public class Join extends Task implements RunnableTask<Join.Output> {
                     ioHandler,
                     leftJoinKey,
                     rightJoinKey,
-                    renderedJoinType,
-                    renderedOnlyFirstMatchOnSemi
+                    rJoinType,
+                    rOnlyFirstMatchOnSemi
                 );
 
                 nestedLoop.join();
@@ -358,8 +357,8 @@ public class Join extends Task implements RunnableTask<Join.Output> {
                     ioHandler,
                     leftJoinKey,
                     rightJoinKey,
-                    renderedJoinType,
-                    renderedOnlyFirstMatchOnSemi
+                    rJoinType,
+                    rOnlyFirstMatchOnSemi
                 );
 
                 sortedMerge.join();
@@ -383,6 +382,7 @@ public class Join extends Task implements RunnableTask<Join.Output> {
     /**
      * Renders a dynamic property with Pebble expression or raw value.
      * Exceptions are thrown with property name.
+     * A property that renders to nothing is an error, never silently replaced by a default value.
      * @param <T> Expected type of the rendered value.
      * @param property The property to render.
      * @param type Expected class of the rendered value.
@@ -395,13 +395,13 @@ public class Join extends Task implements RunnableTask<Join.Output> {
         Class<T> type,
         String propertyName,
         RunContext runContext) {
+        Optional<T> rendered;
         try {
-            return runContext.render(property)
-                .as(type)
-                .orElseThrow();
+            rendered = runContext.render(property).as(type);
         } catch (Exception e) {
             throw new RenderException(propertyName, e);
         }
+        return rendered.orElseThrow(() -> new BlankPropertyException(propertyName));
     }
 
     /**
