@@ -16,6 +16,8 @@ import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.storages.StorageInterface;
 import io.kestra.core.utils.IdUtils;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.flows.State;
+import io.kestra.core.models.validations.ModelValidator;
 
 import jakarta.inject.Inject;
 
@@ -24,6 +26,7 @@ import com.amazon.ion.system.IonSystemBuilder;
 
 import java.util.Map;
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.io.InputStream;
 import java.io.ByteArrayInputStream;
@@ -32,7 +35,9 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.matchesPattern;
 
 @KestraTest
@@ -42,6 +47,9 @@ class JoinTest {
 
     @Inject
     private StorageInterface storageInterface;
+
+    @Inject
+    private ModelValidator modelValidator;
 
     private String defaultKey = "id";
 
@@ -371,6 +379,21 @@ class JoinTest {
         return getOutput(runContext, joinImplementation, joinType, defaultKey, defaultKey, onMissingKey);
     }
 
+
+    /**
+     * Builder of a task that passes validation, so that each validation test changes only one property.
+     * Kestra validates tasks (as when a flow is saved) with mandatory id and type.
+     * @return Task builder with id, type, inputs and keys.
+     */
+    private Join.JoinBuilder<?, ?> validTaskBuilder() {
+        return Join.builder()
+            .id(IdUtils.create())
+            .type(Join.class.getName())
+            .left(Property.ofExpression("{{ left }}"))
+            .right(Property.ofExpression("{{ right }}"))
+            .leftKey(Property.ofValue(defaultKey))
+            .rightKey(Property.ofValue(defaultKey));
+    }
 
     /**
      * Sort lines of ION string.
@@ -1198,6 +1221,99 @@ class JoinTest {
                 }
             }
         }
+    }
+
+    /**
+     * Tests the task final state according to onMissingKey option when keys are missing:
+     * WARNING must end the task in WARNING state, IGNORE must not change the state.
+     * Both inputs have several rows with missing or null keys, so that every implementation extracts them.
+     */
+    @Test
+    void missingKeyFinalStateDependsOnOption() throws Exception {
+
+        String leftContent = """
+            {id:1,leftValue:"L1"}
+            {id:null,leftValue:"L2-A"}
+            {id:2,leftValue:"L2-B"}
+            {leftValue:"L3"}
+            {id:5,leftValue:"L5"}""";
+
+        String rightContent = """
+            {id:2,rightValue:"R2-A"}
+            {id:null,rightValue:"R2-B"}
+            {id:3,rightValue:"R3"}
+            {rightValue:"R4"}
+            {id:5,rightValue:"R5-A"}""";
+
+        Map<MissingKeyAction, Optional<State.Type>> expectedStates =
+            Map.of(
+                MissingKeyAction.WARNING, Optional.of(State.Type.WARNING),
+                MissingKeyAction.IGNORE, Optional.empty()
+            );
+
+        RunContext runContext = getRunContext(leftContent, rightContent);
+
+        for (var testEntry : expectedStates.entrySet()) {
+            for (JoinImplementation joinImplementation : JoinImplementation.values()) {
+                for (JoinType joinType : JoinType.values()) {
+                    Join.Output runOutput = getOutput(runContext, joinImplementation, joinType, testEntry.getKey());
+
+                    assertThat(
+                        "Final state with " + testEntry.getKey() + " on missing key, " + joinImplementation + ", " + joinType + " join",
+                        runOutput.finalState(),
+                        equalTo(testEntry.getValue())
+                    );
+                }
+            }
+        }
+    }
+
+    /*
+    ---------------------------------------------------------------------------------------
+    Tests of task validation (as done by Kestra when a flow is saved)
+    ---------------------------------------------------------------------------------------
+    */
+
+    /**
+     * Tests that the base task used by validation tests is valid,
+     * so that violations found by other validation tests come from the property they change.
+     */
+    @Test
+    void validTaskHasNoViolation() {
+        Join task = validTaskBuilder().build();
+
+        assertThat("Task should be valid", modelValidator.isValid(task).isEmpty(), is(true));
+    }
+
+    /**
+     * Tests that identical left and right labels are rejected.
+     */
+    @Test
+    void identicalLabelsAreRejected() {
+        Join task = validTaskBuilder()
+            .leftLabel("same")
+            .rightLabel("same")
+            .build();
+
+        var violation = modelValidator.isValid(task);
+
+        assertThat("Identical labels should be rejected", violation.isPresent(), is(true));
+        assertThat(violation.get().getMessage(), containsString("leftLabel and rightLabel must be different"));
+    }
+
+    /**
+     * Tests that a blank label is rejected.
+     */
+    @Test
+    void blankLabelIsRejected() {
+        Join task = validTaskBuilder()
+            .leftLabel("   ")
+            .build();
+
+        var violation = modelValidator.isValid(task);
+
+        assertThat("Blank label should be rejected", violation.isPresent(), is(true));
+        assertThat(violation.get().getMessage(), containsString("leftLabel"));
     }
 
     /*
