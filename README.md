@@ -35,18 +35,61 @@
 </p>
 <p align="center" style="color:grey;"><i>Get started with Kestra in 3 minutes.</i></p>
 
-# Kestra Plugin Template
+# Kestra Join Plugin
+
+Join two ION files from Kestra internal storage, the way you would join two tables in SQL.
 
 ## Why
 
-- What user problem does this solve? Teams need a concrete starting point for building and validating new Kestra plugins without recreating the same project scaffolding from scratch.
-- Why would a team adopt this plugin in a workflow? It gives plugin authors a ready-made reference repo they can adapt alongside their own build, test, and publishing workflow.
-- What operational/business outcome does it enable? It shortens plugin delivery time, reduces setup mistakes, and makes internal or partner plugin development more repeatable.
+- **What user problem does this solve?** Flows often fetch related data from different sources, such as a database query and an API export, and need to combine them on a common key. Without this plugin, that means loading both into a database or writing a custom script.
+- **Why would a team adopt this plugin in a workflow?** It joins the ION files that other Kestra tasks already produce (for example `CsvToIon` or JDBC `Query` with `fetchType: STORE`) in a single declarative task, with no external engine.
+- **What operational/business outcome does it enable?** Simpler data pipelines with fewer moving parts, and joins that are explicit and reviewable in the flow YAML.
 
 ## What
 
-- Provides plugin components under `io.kestra.plugin.templates`.
-- Includes classes such as `Example`, `Trigger`.
+The plugin provides one task, `io.kestra.plugin.join.Join`:
+
+- **Inputs:** two ION files (`left` and `right`), usually outputs of previous tasks, plus a key on each side (`leftKey`, `rightKey`). Nested keys use dot notation, e.g. `customer.id`.
+- **Join types** (`joinType`): `INNER` (default), `FULL_OUTER`, `LEFT_OUTER`, `RIGHT_OUTER`, `LEFT_ANTI`, `RIGHT_ANTI`, `LEFT_SEMI`, `RIGHT_SEMI`.
+- **Algorithms** (`joinImplementation`): `HASH` (default), `NESTED_LOOP`, `SORTED_MERGE`. They return the same rows, possibly in a different order.
+- **Output modes** (`outputMode`): how fields from each side are combined. `OVERWRITE` (default) merges fields, and the right value wins when names collide. `PREFIX` renames fields with `leftLabel`/`rightLabel` and `prefixSeparator`. `NEST` puts each side in its own object.
+- **Missing keys** (`onMissingKey`): `FAIL` (default), `WARNING` (the task ends in `WARNING` state) or `IGNORE`.
+- **Outputs:** `uri` of the joined ION file, and the row counts `outputSize`, `leftSize` and `rightSize`.
+
+### Example
+
+```yaml
+id: join_customers_orders
+namespace: company.team
+
+tasks:
+  - id: customers
+    type: io.kestra.plugin.core.storage.Write
+    extension: .ion
+    content: |
+      {customer_id:1,name:"Alice"}
+      {customer_id:2,name:"Bob"}
+      {customer_id:3,name:"Carol"}
+
+  - id: orders
+    type: io.kestra.plugin.core.storage.Write
+    extension: .ion
+    content: |
+      {order_id:101,customer_id:1,total:25.50}
+      {order_id:102,customer_id:1,total:12.00}
+      {order_id:103,customer_id:3,total:40.00}
+      {order_id:104,customer_id:4,total:8.75}
+
+  - id: join
+    type: io.kestra.plugin.join.Join
+    left: "{{ outputs.customers.uri }}"
+    right: "{{ outputs.orders.uri }}"
+    leftKey: customer_id
+    rightKey: customer_id
+    joinType: INNER
+```
+
+The [plugin documentation](src/main/resources/doc/io.kestra.plugin.join.md) covers every option in detail.
 
 ## Running Kestra locally with this plugin
 
