@@ -51,9 +51,9 @@ The plugin provides one task, `io.kestra.plugin.join.Join`:
 
 - **Inputs:** two ION files (`left` and `right`), usually outputs of previous tasks, plus a key on each side (`leftKey`, `rightKey`). Nested keys use dot notation, e.g. `customer.id`.
 - **Join types** (`joinType`): `INNER` (default), `FULL_OUTER`, `LEFT_OUTER`, `RIGHT_OUTER`, `LEFT_ANTI`, `RIGHT_ANTI`, `LEFT_SEMI`, `RIGHT_SEMI`.
-- **Algorithms** (`joinImplementation`): `HASH` (default), `NESTED_LOOP`, `SORTED_MERGE`. They return the same rows, possibly in a different order.
+- **Join implementations** (`joinImplementation`): `HASH` (default), `NESTED_LOOP`, `SORTED_MERGE`. They return the same rows, possibly in a different order.
 - **Output modes** (`outputMode`): how fields from each side are combined. `OVERWRITE` (default) merges fields, and the right value wins when names collide. `PREFIX` renames fields with `leftLabel`/`rightLabel` and `prefixSeparator`. `NEST` puts each side in its own object.
-- **Missing keys** (`onMissingKey`): `FAIL` (default), `WARNING` (the task ends in `WARNING` state) or `IGNORE`.
+- **Task behaviors on missing key** (`onMissingKey`): `FAIL` (default), `WARNING` (the task ends in `WARNING` state) or `IGNORE`.
 - **Outputs:** `uri` of the joined ION file, and the row counts `outputSize`, `leftSize` and `rightSize`.
 
 ### Example

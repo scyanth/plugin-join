@@ -221,12 +221,9 @@ public class Join extends Task implements RunnableTask<Join.Output> {
     @Schema(
         title = "What to do when key field is missing from an input (for at least one row)",
         description = """
-            Applies when a row has no key field, or a `null` key value.
-            - `FAIL` (default): the task fails with an error showing the row.
+            - `FAIL` (default): the task fails.
             - `WARNING`: the task continues and ends in `WARNING` state.
-            - `IGNORE`: the task continues and its state is not changed.
-
-            With `WARNING` and `IGNORE`, the first such row of each input is logged, and rows without a key never match."""
+            - `IGNORE`: the task continues and its state is not changed."""
     )
     @PluginProperty(group = "reliability")
     @Builder.Default
