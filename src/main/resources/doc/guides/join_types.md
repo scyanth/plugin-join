@@ -5,11 +5,20 @@
 venn-beta
     set A:10
     set B:10
+        text labelB["B"]
+    set A2:10
+    union A,A2:10
+        text labelA["A"]
     union A,B:3
+    union A2,B:3
+    union A,A2,B:3
         text innerFields["A + B fields"]
-    style A fill:#ffffff,fill-opacity:0,stroke:#000000,color:#000000
-    style B fill:#ffffff,fill-opacity:0,stroke:#000000,color:#000000
-    style A,B fill:#dbff4d
+    style A fill:#ffffff,fill-opacity:1,stroke:#000000,color:transparent
+    style B fill:#ffffff,fill-opacity:1,stroke:#000000,color:transparent
+    style A2 fill:#ffffff,fill-opacity:0,stroke:#000000,color:transparent
+    style A,A2,B fill:#ccff00
+    style labelA color:#000000
+    style labelB color:#000000
     style innerFields color:#000000
 ```
 ### Matching rows between A and B.
@@ -25,10 +34,19 @@ JOIN B ON A.column = B.column
 venn-beta
     set A:10
     set B:10
+        text labelB["B"]
+    set A2:10
+    union A,A2:10
+        text labelA["A"]
     union A,B:3
-    style A fill:#ccff00,fill-opacity:0.7,stroke:#000000,color:#000000
-    style B fill:#ccff00,fill-opacity:0.7,stroke:#000000,color:#000000
-    style A,B fill:#dbff4d
+    union A2,B:3
+    union A,A2,B:3
+    style A fill:#ccff00,fill-opacity:1,stroke:#000000,color:transparent
+    style B fill:#ccff00,fill-opacity:1,stroke:#000000,color:transparent
+    style A2 fill:#ffffff,fill-opacity:0,stroke:#000000,color:transparent
+    style A,A2,B fill:#ccff00
+    style labelA color:#000000
+    style labelB color:#000000
 ```
 ### Rows from A and B, with matching or not.
 #### SQL equivalent: 
@@ -43,10 +61,19 @@ FULL JOIN B ON A.column = B.column
 venn-beta
     set A:10
     set B:10
+        text labelB["B"]
+    set A2:10
+    union A,A2:10
+        text labelA["A"]
     union A,B:3
-    style A fill:#ccff00,fill-opacity:0.7,stroke:#000000,color:#000000
-    style B fill:#ffffff,fill-opacity:0,stroke:#000000,color:#000000
-    style A,B fill:#dbff4d
+    union A2,B:3
+    union A,A2,B:3
+    style A fill:#ccff00,fill-opacity:1,stroke:#000000,color:transparent
+    style B fill:#ffffff,fill-opacity:1,stroke:#000000,color:transparent
+    style A2 fill:#ffffff,fill-opacity:0,stroke:#000000,color:transparent
+    style A,A2,B fill:#ccff00
+    style labelA color:#000000
+    style labelB color:#000000
 ```
 ### Rows from A, matching with B or not.
 #### SQL equivalent: 
@@ -61,10 +88,19 @@ LEFT JOIN B ON A.column = B.column
 venn-beta
     set A:10
     set B:10
+        text labelB["B"]
+    set A2:10
+    union A,A2:10
+        text labelA["A"]
     union A,B:3
-    style A fill:#ffffff,fill-opacity:0,stroke:#000000,color:#000000
-    style B fill:#ccff00,fill-opacity:0.7,stroke:#000000,color:#000000
-    style A,B fill:#dbff4d
+    union A2,B:3
+    union A,A2,B:3
+    style A fill:#ffffff,fill-opacity:1,stroke:#000000,color:transparent
+    style B fill:#ccff00,fill-opacity:1,stroke:#000000,color:transparent
+    style A2 fill:#ffffff,fill-opacity:0,stroke:#000000,color:transparent
+    style A,A2,B fill:#ccff00
+    style labelA color:#000000
+    style labelB color:#000000
 ```
 ### Rows from B, matching with A or not.
 #### SQL equivalent: 
@@ -79,10 +115,19 @@ RIGHT JOIN B ON A.column = B.column
 venn-beta
     set A:10
     set B:10
+        text labelB["B"]
+    set A2:10
+    union A,A2:10
+        text labelA["A"]
     union A,B:3
-    style A fill:#ccff00,fill-opacity:0.7,stroke:#000000,color:#000000
-    style B fill:#ffffff,fill-opacity:0,stroke:#000000,color:#000000
-    style A,B fill:#ffffff
+    union A2,B:3
+    union A,A2,B:3
+    style A fill:#ccff00,fill-opacity:1,stroke:#000000,color:transparent
+    style B fill:#ffffff,fill-opacity:1,stroke:#000000,color:transparent
+    style A2 fill:#ffffff,fill-opacity:0,stroke:#000000,color:transparent
+    style A,A2,B fill:#ffffff
+    style labelA color:#000000
+    style labelB color:#000000
 ```
 ### Rows from A with no match with B.
 #### SQL equivalent:
@@ -98,10 +143,19 @@ WHERE B.column IS NULL
 venn-beta
     set A:10
     set B:10
+        text labelB["B"]
+    set A2:10
+    union A,A2:10
+        text labelA["A"]
     union A,B:3
-    style A fill:#ffffff,fill-opacity:0,stroke:#000000,color:#000000
-    style B fill:#ccff00,fill-opacity:0.7,stroke:#000000,color:#000000
-    style A,B fill:#ffffff
+    union A2,B:3
+    union A,A2,B:3
+    style A fill:#ffffff,fill-opacity:1,stroke:#000000,color:transparent
+    style B fill:#ccff00,fill-opacity:1,stroke:#000000,color:transparent
+    style A2 fill:#ffffff,fill-opacity:0,stroke:#000000,color:transparent
+    style A,A2,B fill:#ffffff
+    style labelA color:#000000
+    style labelB color:#000000
 ```
 ### Rows from B with no match with A.
 #### SQL equivalent:
@@ -117,11 +171,20 @@ WHERE A.column IS NULL
 venn-beta
     set A:10
     set B:10
+        text labelB["B"]
+    set A2:10
+    union A,A2:10
+        text labelA["A"]
     union A,B:3
+    union A2,B:3
+    union A,A2,B:3
         text leftSemiFields["A fields only"]
-    style A fill:#ffffff,fill-opacity:0,stroke:#000000,color:#000000
-    style B fill:#ffffff,fill-opacity:0,stroke:#000000,color:#000000
-    style A,B fill:#dbff4d
+    style A fill:#ffffff,fill-opacity:1,stroke:#000000,color:transparent
+    style B fill:#ffffff,fill-opacity:1,stroke:#000000,color:transparent
+    style A2 fill:#ffffff,fill-opacity:0,stroke:#000000,color:transparent
+    style A,A2,B fill:#ccff00
+    style labelA color:#000000
+    style labelB color:#000000
     style leftSemiFields color:#000000
 ```
 ### Rows from A matching with B.
@@ -141,11 +204,20 @@ WHERE column IN (
 venn-beta
     set A:10
     set B:10
+        text labelB["B"]
+    set A2:10
+    union A,A2:10
+        text labelA["A"]
     union A,B:3
+    union A2,B:3
+    union A,A2,B:3
         text rightSemiFields["B fields only"]
-    style A fill:#ffffff,fill-opacity:0,stroke:#000000,color:#000000
-    style B fill:#ffffff,fill-opacity:0,stroke:#000000,color:#000000
-    style A,B fill:#dbff4d
+    style A fill:#ffffff,fill-opacity:1,stroke:#000000,color:transparent
+    style B fill:#ffffff,fill-opacity:1,stroke:#000000,color:transparent
+    style A2 fill:#ffffff,fill-opacity:0,stroke:#000000,color:transparent
+    style A,A2,B fill:#ccff00
+    style labelA color:#000000
+    style labelB color:#000000
     style rightSemiFields color:#000000
 ```
 ### Rows from B matching with A.
