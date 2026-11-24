@@ -2,6 +2,13 @@
 
 ## Inner Join
 ```mermaid
+---
+config:
+  venn:
+    width: 400
+    height: 225
+  themeCSS: ".venn-text-node { font-size: 40px; transform: translateY(-7.5px); } .venn-text-area:nth-child(1) .venn-text-node { transform: translate(-7px, -7.5px); } .venn-text-area:nth-child(2) .venn-text-node { transform: translate(7px, -7.5px); } .venn-text-area:nth-child(3) .venn-text-node { font-size: 20px; }"
+---
 venn-beta
     set A:10
     set B:10
@@ -31,6 +38,13 @@ JOIN B ON A.column = B.column
 ---
 ## Full Outer Join
 ```mermaid
+---
+config:
+  venn:
+    width: 400
+    height: 225
+  themeCSS: ".venn-text-node { font-size: 40px; transform: translateY(-7.5px); } .venn-text-area:nth-child(1) .venn-text-node { transform: translate(-7px, -7.5px); } .venn-text-area:nth-child(2) .venn-text-node { transform: translate(7px, -7.5px); } .venn-text-area:nth-child(3) .venn-text-node { font-size: 20px; }"
+---
 venn-beta
     set A:10
     set B:10
@@ -58,6 +72,13 @@ FULL JOIN B ON A.column = B.column
 ---
 ## Left Outer Join
 ```mermaid
+---
+config:
+  venn:
+    width: 400
+    height: 225
+  themeCSS: ".venn-text-node { font-size: 40px; transform: translateY(-7.5px); } .venn-text-area:nth-child(1) .venn-text-node { transform: translate(-7px, -7.5px); } .venn-text-area:nth-child(2) .venn-text-node { transform: translate(7px, -7.5px); } .venn-text-area:nth-child(3) .venn-text-node { font-size: 20px; }"
+---
 venn-beta
     set A:10
     set B:10
@@ -85,6 +106,13 @@ LEFT JOIN B ON A.column = B.column
 ---
 ## Right Outer Join
 ```mermaid
+---
+config:
+  venn:
+    width: 400
+    height: 225
+  themeCSS: ".venn-text-node { font-size: 40px; transform: translateY(-7.5px); } .venn-text-area:nth-child(1) .venn-text-node { transform: translate(-7px, -7.5px); } .venn-text-area:nth-child(2) .venn-text-node { transform: translate(7px, -7.5px); } .venn-text-area:nth-child(3) .venn-text-node { font-size: 20px; }"
+---
 venn-beta
     set A:10
     set B:10
@@ -112,6 +140,13 @@ RIGHT JOIN B ON A.column = B.column
 ---
 ## Left Anti Join
 ```mermaid
+---
+config:
+  venn:
+    width: 400
+    height: 225
+  themeCSS: ".venn-text-node { font-size: 40px; transform: translateY(-7.5px); } .venn-text-area:nth-child(1) .venn-text-node { transform: translate(-7px, -7.5px); } .venn-text-area:nth-child(2) .venn-text-node { transform: translate(7px, -7.5px); } .venn-text-area:nth-child(3) .venn-text-node { font-size: 20px; }"
+---
 venn-beta
     set A:10
     set B:10
@@ -140,6 +175,13 @@ WHERE B.column IS NULL
 ---
 ## Right Anti Join
 ```mermaid
+---
+config:
+  venn:
+    width: 400
+    height: 225
+  themeCSS: ".venn-text-node { font-size: 40px; transform: translateY(-7.5px); } .venn-text-area:nth-child(1) .venn-text-node { transform: translate(-7px, -7.5px); } .venn-text-area:nth-child(2) .venn-text-node { transform: translate(7px, -7.5px); } .venn-text-area:nth-child(3) .venn-text-node { font-size: 20px; }"
+---
 venn-beta
     set A:10
     set B:10
@@ -168,6 +210,13 @@ WHERE A.column IS NULL
 ---
 ## Left Semi Join
 ```mermaid
+---
+config:
+  venn:
+    width: 400
+    height: 225
+  themeCSS: ".venn-text-node { font-size: 40px; transform: translateY(-7.5px); } .venn-text-area:nth-child(1) .venn-text-node { transform: translate(-7px, -7.5px); } .venn-text-area:nth-child(2) .venn-text-node { transform: translate(7px, -7.5px); } .venn-text-area:nth-child(3) .venn-text-node { font-size: 20px; }"
+---
 venn-beta
     set A:10
     set B:10
@@ -201,6 +250,13 @@ WHERE column IN (
 ---
 ## Right Semi Join
 ```mermaid
+---
+config:
+  venn:
+    width: 400
+    height: 225
+  themeCSS: ".venn-text-node { font-size: 40px; transform: translateY(-7.5px); } .venn-text-area:nth-child(1) .venn-text-node { transform: translate(-7px, -7.5px); } .venn-text-area:nth-child(2) .venn-text-node { transform: translate(7px, -7.5px); } .venn-text-area:nth-child(3) .venn-text-node { font-size: 20px; }"
+---
 venn-beta
     set A:10
     set B:10
