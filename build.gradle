@@ -51,7 +51,7 @@ dependencies {
     compileOnly group: "io.kestra", name: "script", version: kestraVersion
 
     // Amazon Ion
-    implementation "com.amazon.ion:ion-java:1.12.1"
+    implementation "com.amazon.ion:ion-java:1.12.2"
 }
 
 
